@@ -1,10 +1,10 @@
-stages: [test, deploy]
+stages: [alloc, test, deploy, cleanup]
 
-# LC corona CI via an explicit Flux allocation:
-# the job runs on the shell runner, creates ONE 1-node allocation with
-# `flux batch`, grabs its id with `flux job last`, and then runs EACH CI step
-# inside that same allocation through `flux proxy <jobid>`. The allocation is
-# cancelled in after_script, so the whole pipeline uses a single allocation.
+# LC corona CI via a single shared Flux allocation:
+#  - `allocate` creates ONE 1-node allocation and saves its Flux job id to
+#    .flux-jobid (artifact) so ALL jobs in the pipeline share it globally.
+#  - every CI job reads the id and runs its steps via `flux proxy <jobid>`.
+#  - `release-allocation` cancels it at the end (runs even on failure).
 .corona-flux:
   id_tokens:
     SITE_ID_TOKEN:
@@ -16,6 +16,22 @@ stages: [test, deploy]
     SMALL_QUEUE: pdebug
     SMALL_QUEUE_WALLTIME: 60
 
+allocate:
+  extends: .corona-flux
+  stage: alloc
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  script:
+    - flux batch -N 1 -q "$SMALL_QUEUE" -t "${SMALL_QUEUE_WALLTIME}m" --job-name=dfoptimizer-ci --wrap sleep inf
+    - JOBID=$(flux job last)
+    - echo "$JOBID" > .flux-jobid
+    - echo "Created Flux allocation $JOBID (shared by all CI jobs)"
+    # No timeout: batch queues may take long to schedule the allocation.
+    - flux job wait-event "$JOBID" start
+  artifacts:
+    paths: [.flux-jobid]
+
 # Converted from .github/workflows/ci.yml (build-and-test).
 # NOTE(gitlab-migration): the GitHub matrix (ubuntu-22.04 x python 3.10/3.11/3.12,
 # via astral-sh/setup-uv) is collapsed to the single LC module toolchain
@@ -24,25 +40,18 @@ stages: [test, deploy]
 build-and-test:
   extends: .corona-flux
   stage: test
+  needs: [allocate]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
   script:
-    # Create the allocation (a placeholder batch job that just sleeps).
-    - flux batch -N 1 -q "$SMALL_QUEUE" -t "${SMALL_QUEUE_WALLTIME}m" --job-name=dfoptimizer-ci --wrap sleep inf
-    # Get the allocation's Flux job id and wait until it starts.
-    - JOBID=$(flux job last)
-    - echo "Using Flux allocation $JOBID"
-    - flux job wait-event -t 300 "$JOBID" start
+    - JOBID=$(cat .flux-jobid)
     - flux proxy "$JOBID" bash -lc "module load $PYTHON_MODULE && python3 -m venv .venv && source .venv/bin/activate && pip install -e '.[streaming]' pytest"
     - flux proxy "$JOBID" bash -lc "source .venv/bin/activate && pytest -v tests/"
     # Offline findings replay smoke test (same command as the GitHub workflow).
     - flux proxy "$JOBID" bash -lc "source .venv/bin/activate && DFOPTIMIZER_BOOTSTRAP_DLIO=1 python main.py --transport file --findings-file \"$CI_PROJECT_DIR/tests/data/findings.jsonl\""
     # Docs build (published by the pages job below from this artifact).
     - flux proxy "$JOBID" bash -lc "module load $PYTHON_MODULE && python3 -m venv .venv-docs && source .venv-docs/bin/activate && pip install -r docs/requirements.txt && sphinx-build -b html docs public"
-  after_script:
-    # Release the allocation even if a step failed.
-    - JOBID=$(flux job last) && flux cancel "$JOBID" || true
   artifacts:
     paths: [public]
 
@@ -58,3 +67,15 @@ pages:
     - echo "Publishing docs built by build-and-test"
   artifacts:
     paths: [public]
+
+release-allocation:
+  extends: .corona-flux
+  stage: cleanup
+  needs: [allocate, build-and-test]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+      when: always
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: always
+  script:
+    - flux cancel "$(cat .flux-jobid)" || true
