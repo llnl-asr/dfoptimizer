@@ -36,3 +36,4 @@ Selected: 2026-07-30. Source: git@github.com:llnl/dfoptimizer.git (default branc
 - 2026-07-30: CI converted, docs authored, tests green (43 passed / 2 xfailed; sphinx + YAML + offline replay OK), no in-place dep changes needed, committed on gitlab-migration, pushed main + tags + gitlab-migration to czgitlab. SHAs: main=e242557ee1ff28090650ede544264212868d7b4b, gitlab-migration=c7d067c35b117d41d70c4b6e8fa7fae269661d65. No tags existed. Repo left on main.
 - 2026-07-30: CI switched to corona flux-allocation flow, single allocation per pipeline; MR opened.
 - 2026-07-30: Flux allocation made global via allocate/.flux-jobid artifact/release-allocation jobs; wait-event timeout removed.
+- 2026-07-30: allocate switched to flux alloc --bg (blocks until granted); branch rebased on gitlab/main before push.
