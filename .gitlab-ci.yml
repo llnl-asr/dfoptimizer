@@ -48,12 +48,9 @@ build-and-test:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
   script:
     - JOBID=$(cat .flux-jobid)
-    - flux proxy "$JOBID" bash -lc "module load $PYTHON_MODULE && python3 -m venv .venv && source .venv/bin/activate && pip install -e '.[streaming]' pytest"
-    - flux proxy "$JOBID" bash -lc "source .venv/bin/activate && pytest -v tests/"
-    # Offline findings replay smoke test (same command as the GitHub workflow).
-    - flux proxy "$JOBID" bash -lc "source .venv/bin/activate && DFOPTIMIZER_BOOTSTRAP_DLIO=1 python main.py --transport file --findings-file \"$CI_PROJECT_DIR/tests/data/findings.jsonl\""
-    # Docs build (published by the pages job below from this artifact).
-    - flux proxy "$JOBID" bash -lc "module load $PYTHON_MODULE && python3 -m venv .venv-docs && source .venv-docs/bin/activate && pip install -r docs/requirements.txt && sphinx-build -b html docs public"
+    # flux run -N 1 executes the script ON the allocated node; podman provides
+    # the python environment (mirrors the GitHub Actions CI).
+    - flux proxy "$JOBID" flux run -N 1 bash .gitlab/ci/build-test-docs.sh
   artifacts:
     paths: [public]
 
@@ -73,7 +70,8 @@ pages:
 release-allocation:
   extends: .corona-flux
   stage: cleanup
-  needs: [allocate, build-and-test]
+  # Runs last: alloc → build-and-test → pages → deallocate.
+  needs: [allocate, build-and-test, {job: pages, optional: true}]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push"'
       when: always
