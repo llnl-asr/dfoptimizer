@@ -38,3 +38,4 @@ Selected: 2026-07-30. Source: git@github.com:llnl/dfoptimizer.git (default branc
 - 2026-07-30: Flux allocation made global via allocate/.flux-jobid artifact/release-allocation jobs; wait-event timeout removed.
 - 2026-07-30: allocate switched to flux alloc --bg (blocks until granted); branch rebased on gitlab/main before push.
 - 2026-07-30: CI now runs inside podman containers (python:3.11) on the allocated node via flux run; pattern validated on cpp-logger.
+- 2026-07-30: fixed allocation-id race — 'flux job last' is user-global and concurrent pipelines cancelled each other's allocations; now uses a unique per-job name (<proj>-$CI_PIPELINE_ID-$CI_JOB_ID) with 'flux jobs --name' lookup, and cleanup only cancels a non-empty .flux-jobid.
