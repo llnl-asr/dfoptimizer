@@ -1,6 +1,6 @@
 # DFOptimizer
 
-DFOptimizer turns [DFDiagnoser](https://github.com/LLNL/dfdiagnoser)'s **diagnosis
+DFOptimizer turns [DFDiagnoser](https://github.com/llnl-asr/dfdiagnoser)'s **diagnosis
 findings** into **ActionPlans** — concrete knob changes (e.g. *raise dataloader
 prefetch from 2 to 4*) — and, online, feeds them back to the running application to
 **re-tune it in flight**. It runs the same way **offline** (replay saved findings to

@@ -39,7 +39,6 @@ allocate:
     paths: [.flux-jobid]
 
 # Converted from .github/workflows/ci.yml (build-and-test).
-# NOTE(gitlab-migration): the GitHub matrix (ubuntu-22.04 x python 3.10/3.11/3.12,
 # via astral-sh/setup-uv) is collapsed to the single LC module toolchain
 # ($PYTHON_MODULE) with a plain venv + pip instead of uv/docker.
 # One allocation; tests + docs both run on it via flux proxy.
